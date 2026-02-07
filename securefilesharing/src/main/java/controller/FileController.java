@@ -1,53 +1,71 @@
 package com.securefilesharing.controller;
 
 import com.securefilesharing.model.FileMetadata;
-import com.securefilesharing.repository.FileMetadataRepository;
-import org.springframework.beans.factory.annotation.Value;
+import com.securefilesharing.model.User;
+import com.securefilesharing.repository.UserRepository;
+import com.securefilesharing.service.FileService;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.UUID;
+import java.io.FileInputStream;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
-    @Value("${file.upload-dir}")
-    private String uploadDir;
+    private final FileService fileService;
+    private final UserRepository userRepository;
 
-    private final FileMetadataRepository fileRepo;
-
-    public FileController(FileMetadataRepository fileRepo) {
-        this.fileRepo = fileRepo;
+    public FileController(FileService fileService,
+                          UserRepository userRepository) {
+        this.fileService = fileService;
+        this.userRepository = userRepository;
     }
 
+    // =========================
+    // UPLOAD FILE
+    // =========================
     @PostMapping("/upload")
-    public String uploadFile(
+    public FileMetadata uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam String username
-    ) throws IOException {
+            Authentication authentication) throws Exception {
 
-        File dir = new File(uploadDir);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+        String username = authentication.getName();
 
-        String storedFileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-        String filePath = uploadDir + "/" + storedFileName;
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        file.transferTo(new File(filePath));
+        return fileService.uploadFile(file, user);
+    }
 
-        FileMetadata meta = new FileMetadata();
-        meta.setOriginalFileName(file.getOriginalFilename());
-        meta.setStoredFileName(storedFileName);
-        meta.setFilePath(filePath);
-        meta.setFileSize(file.getSize());
-        meta.setUploadedBy(username);
+    // =========================
+    // DOWNLOAD FILE
+    // =========================
+    @GetMapping("/download/{id}")
+    public ResponseEntity<Resource> downloadFile(
+            @PathVariable Long id,
+            Authentication authentication) throws Exception {
 
-        fileRepo.save(meta);
+        String username = authentication.getName();
 
-        return "File uploaded successfully";
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        File file = fileService.downloadFile(id, user);
+
+        InputStreamResource resource =
+                new InputStreamResource(new FileInputStream(file));
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + file.getName() + "\"")
+                .contentLength(file.length())
+                .body(resource);
     }
 }

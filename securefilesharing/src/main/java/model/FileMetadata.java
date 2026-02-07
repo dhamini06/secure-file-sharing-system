@@ -11,11 +11,18 @@ public class FileMetadata {
     private Long id;
 
     private String originalFileName;
+
     private String storedFileName;
+
     private String filePath;
+
     private Long fileSize;
 
-    private String uploadedBy;
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    // ===== Getters & Setters =====
 
     public Long getId() {
         return id;
@@ -53,11 +60,11 @@ public class FileMetadata {
         this.fileSize = fileSize;
     }
 
-    public String getUploadedBy() {
-        return uploadedBy;
+    public User getUser() {
+        return user;
     }
 
-    public void setUploadedBy(String uploadedBy) {
-        this.uploadedBy = uploadedBy;
+    public void setUser(User user) {
+        this.user = user;
     }
 }
